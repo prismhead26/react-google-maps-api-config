@@ -4,18 +4,20 @@ import {
   useMap,
   useMapsLibrary,
   AdvancedMarker,
+  InfoWindow,
+  useAdvancedMarkerRef,
 } from "@vis.gl/react-google-maps";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 // import { useCallback } from "react";
 
 const CustomMap = () => {
-  let coords = [];
-
   // create state for center and coordsResult
-  const state = {
+  let coords = [];
+  // create state for center and coordsResult
+  const [state, setState] = useState({
     center: { lat: 40.014984, lng: -105.270546 },
     coordsResult: [],
-  };
+  });
 
   // const request = {
   //   textQuery: "Hiking trails near me",
@@ -48,43 +50,73 @@ const CustomMap = () => {
     console.log("svc....", svc);
 
     svc.textSearch(request, (results, status) => {
-      console.log("res", results);
-      console.log("stat", status);
+      console.log("results: ", results);
+      console.log("status is", status);
+
       for (var i = 0; i < results.length; i++) {
         coords.push(results[i]);
       }
-      state.center = results[0].geometry.location;
-      state.coordsResult = coords;
-      console.log("state", state);
+      setState({
+        center: { lat: 40.014984, lng: -105.270546 },
+        coordsResult: coords,
+      });
     });
   }, [placesLib, map]);
 
-  // svc.findPlaceFromQuery(request, (results, status) => {
-  //   if (status === google.maps.places.PlacesServiceStatus.OK) {
-  //     for (var i = 0; i < results.length; i++) {
-  //       coords.push(results[i]);
-  //     }
+  // `markerRef` and `marker` are needed to establish the connection between
+  // the marker and infowindow (if you're using the Marker component, you
+  // can use the `useMarkerRef` hook instead).
+  const [markerRef, marker] = useAdvancedMarkerRef();
 
-  //     this.setState({
-  //       center: results[0].geometry.location,
-  //       coordsResult: coords,
-  //     });
-  //   }
-  // });
+  const [infoWindowShown, setInfoWindowShown] = useState(false);
+
+  // clicking the marker will toggle the infowindow
+  const handleMarkerClick = useCallback(
+    () => setInfoWindowShown((isShown) => !isShown),
+    []
+  );
+
+  // if the maps api closes the infowindow, we have to synchronize our state
+  const handleClose = useCallback(() => setInfoWindowShown(false), []);
+
+  console.log("state...", state);
 
   return (
-    // using advanced marker to display the results on the map
-    <Map center={state.center} zoom={14}>
+    // render the map
+
+    <Map
+      mapId={"map"}
+      style={{ width: "100vw", height: "100vh" }}
+      defaultCenter={state.center}
+      defaultZoom={14}
+      gestureHandling={"greedy"}
+      disableDefaultUI={true}
+    >
+      {/* add advancedMarker to each coord and display onto map */}
       {state.coordsResult.map((coord, index) => (
-        <AdvancedMarker
-          map={map}
-          key={index}
-          position={coord.geometry.location}
-          title={coord.name}
-          onClick={() => {
-            console.log("Marker clicked", coord);
-          }}
-        />
+        <>
+          <AdvancedMarker
+            key={index}
+            position={coord.geometry.location}
+            title={coord.name}
+            onClick={() => {
+              console.log("clicked on marker", coord);
+              handleMarkerClick();
+            }}
+            ref={markerRef}
+          />
+          {infoWindowShown && (
+            <InfoWindow
+              anchor={marker}
+              onCloseClick={handleClose}
+              options={{ maxWidth: 300 }}
+            >
+              <div>
+                <h1>{coord.name}</h1>
+              </div>
+            </InfoWindow>
+          )}
+        </>
       ))}
     </Map>
   );
